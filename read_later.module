@@ -1,0 +1,142 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ *
+ * Set up the menu items to act as end point to save and 
+ * retrieve scroll position information.
+ *
+ */
+function read_later_menu() {
+  return array(
+    'read_later/%' => array(
+      'title' => 'Read Later',
+      'description' => 'Process ajax requests for scroll position',
+      'page callback' => 'read_later_endpoint',
+      'page arguments' => array(1),
+      'access arguments' => array('view scroll notification'),
+      'type' => MENU_CALLBACK
+    )
+  );
+}
+  
+/**
+ * Implements hook_theme().
+ *
+ * Here we set up a simple template for a special header
+ * to use when needed in your page template.
+ *
+ */
+function read_later_theme($existing, $type, $theme, $path) {
+  return array(
+    'read-later-header' => array(
+      'variables' => array(
+        'user' => false
+      ),
+      'template' => 'read-later-header',
+      'path' => drupal_get_path('module', 'read_later')
+    )
+  );
+}
+
+/**
+ * Implements hook_permission().
+ *
+ * Adding two sets of permissions here allows us to turn the function
+ * on and off via a simple permissions checkbox.
+ *
+ */
+function read_later_permission() {
+  return array(
+    'view scroll notification' => array(
+      'title' => t('View scroll notification'),
+      'description' => t('View the notification letting users know what they\'re missing out on.')
+    ),
+    'save scroll position' => array(
+      'title' => t('Save scroll position'),
+      'description' => t('Save the scroll position by an anchor number, so we can jump to it.')
+    )
+  );
+}
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * Determine whether or not to show the special header, then determine
+ * what capabilities will be enabled on it, by sending variables to our
+ * javascript file.
+ *
+ */
+function read_later_preprocess_page(&$variables) {
+  $variables['read_later_header'] = false;
+  if (isset($variables['node'])) {
+    $node = $variables['node'];
+    if (user_access('save scroll position') && user_is_logged_in()) {
+      global $user;
+      drupal_add_js(drupal_get_path('module', 'read_later') . '/read-later.js');
+      drupal_add_js(array('readLater' => array('uid' => $user->uid, 'nid' => $node->nid, 'anchor' => 0)), 'setting');
+      $variables['read_later_header'] = theme('read-later-header', array('user' => true));
+    }
+    else {
+      $variables['read_later_header'] = theme('read-later-header', array('user' => false));
+    }
+  }
+}
+
+/**
+ * Menu Item for /read_later
+ *
+ * @variables
+ * - $action: Whether to save or load the record
+ */
+function read_later_endpoint($action = false) {
+  $variables = drupal_get_query_parameters();
+
+  // Make sure we're getting all the parameters we need.
+  if (!$variables['uid'] || !$variables['nid']) {
+    drupal_json_output(array('success' => false));
+    return;
+  }
+
+  // Load/Save
+  if ($action == 'load') {
+    // Load the record from the database
+    $anchor_position = db_select('read_later_scroll_positions', 'r')
+      ->fields('r', array('anchor'))
+      ->condition('nid', $variables['nid'])
+      ->condition('uid', $variables['uid'])
+      ->execute()
+      ->fetchField();
+
+    // Only return true if we actually have a scroll position to scroll to
+    if ($anchor_position > 0) {
+      drupal_json_output(array(
+        'success' => true,
+        'anchor' => $anchor_position
+      ));
+      return;
+    }
+  }
+  // Save the record
+  elseif ($action == 'save') {
+    if ($variables['anchor'] > 0) {
+      $record = array(
+        'uid' => $variables['uid'],
+        'nid' => $variables['nid'],
+        'anchor' => $variables['anchor']
+      );
+      // Make sure the write record succeeds
+      try {
+        drupal_write_record('read_later_scroll_positions', $record, 'uid');
+      }
+      catch (Exception $e) {
+        drupal_json_output(array('success' => false));
+        return;
+      }
+      drupal_json_output(array('success' => true));
+      return;
+    }
+  }
+
+  drupal_json_output(array('success' => 'false'));
+}

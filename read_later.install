@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function read_later_schema() {
+  $schema = array();
+
+  $schema['read_later_scroll_positions'] = array(
+    'description' => 'The base table for Read Later scroll positions.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+        'description' => "The {users}.uid of the associated user.",
+      ),
+      'nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => NULL,
+        'description' => "The {node}.nid of the node the position exists on.",
+      ),
+      'anchor' => array(
+        'type' => 'int',
+        'unsigned' => FALSE,
+        'not null' => FALSE,
+        'default' => NULL,
+        'description' => "The {users}.uid of the associated user.",
+      )
+    ),
+    'indexes' => array(
+      'uid' => array('uid'),
+    ),
+    'foreign keys' => array(
+      'uid' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+    'primary key' => array('uid'),
+  );
+
+  return $schema;
+}
